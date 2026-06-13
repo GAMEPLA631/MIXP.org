@@ -1,0 +1,1324 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Slovakia Club DJ Mixpult - Master Recorder Edition</title>
+    <!-- Tailwind CSS pre moderný layout -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome pre ikony -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts - Orbitron pre sci-fi/techno vzhľad -->
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <!-- lamejs - lokálny vysokorýchlostný MP3 enkóder -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lamejs/1.2.1/lame.all.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #050608;
+            background-image: radial-gradient(circle at center, #0e111a 0%, #040507 100%);
+        }
+        .orbitron {
+            font-family: 'Orbitron', sans-serif;
+        }
+        /* Neonové efekty a tiene */
+        .neon-text-cyan {
+            text-shadow: 0 0 10px rgba(6, 182, 212, 0.7), 0 0 20px rgba(6, 182, 212, 0.4);
+        }
+        .neon-text-magenta {
+            text-shadow: 0 0 10px rgba(236, 72, 153, 0.7), 0 0 20px rgba(236, 72, 153, 0.4);
+        }
+        .neon-border-cyan {
+            box-shadow: 0 0 15px rgba(6, 182, 212, 0.2), inset 0 0 15px rgba(6, 182, 212, 0.05);
+            border-color: rgba(6, 182, 212, 0.4);
+        }
+        .neon-border-magenta {
+            box-shadow: 0 0 15px rgba(236, 72, 153, 0.2), inset 0 0 15px rgba(236, 72, 153, 0.05);
+            border-color: rgba(236, 72, 153, 0.4);
+        }
+        /* Prispôsobenie jazdcov (sliders) */
+        input[type="range"] {
+            -webkit-appearance: none;
+            background: #111827;
+            border-radius: 9999px;
+            outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.15s ease-in-out;
+        }
+        .slider-cyan::-webkit-slider-thumb {
+            background: #06b6d4;
+            box-shadow: 0 0 8px #06b6d4;
+        }
+        .slider-magenta::-webkit-slider-thumb {
+            background: #ec4899;
+            box-shadow: 0 0 8px #ec4899;
+        }
+        .slider-gold::-webkit-slider-thumb {
+            background: #f59e0b;
+            box-shadow: 0 0 8px #f59e0b;
+        }
+        /* Animácia otáčania platne */
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .spinning {
+            animation: spin 3s linear infinite;
+        }
+        /* Štýl drop zóny */
+        .drop-zone.dragover {
+            background-color: rgba(6, 182, 212, 0.15);
+            border-style: solid;
+        }
+        .drop-zone-b.dragover {
+            background-color: rgba(236, 72, 153, 0.15);
+            border-style: solid;
+        }
+    </style>
+</head>
+<body class="text-slate-100 min-h-screen flex flex-col justify-between p-4 selection:bg-cyan-500 selection:text-black">
+
+    <header class="w-full max-w-7xl mx-auto bg-slate-900/80 backdrop-blur border border-slate-800 rounded-2xl p-4 mb-6 flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl">
+        <div class="flex items-center gap-3">
+            <div class="bg-gradient-to-tr from-cyan-500 to-fuchsia-500 p-2.5 rounded-xl text-black shadow-lg">
+                <i class="fa-solid fa-compact-disc text-2xl animate-spin" style="animation-duration: 6s;"></i>
+            </div>
+            <div>
+                <h1 class="orbitron text-xl md:text-2xl font-black tracking-widest bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-fuchsia-500">
+                    SLOVAKIA CLUB <span class="text-white">DJ</span>
+                </h1>
+                <p class="text-xs text-slate-400 font-semibold tracking-wider uppercase">Mixpult s HQ 320kbps MP3 Nahrávaním</p>
+            </div>
+        </div>
+
+        <!-- Master Hlasitosť -->
+        <div class="flex items-center gap-4 bg-slate-950/60 px-5 py-3 rounded-xl border border-slate-800 w-full md:w-auto md:min-w-[280px]">
+            <i class="fa-solid fa-volume-high text-amber-500 text-lg"></i>
+            <div class="flex-1">
+                <div class="flex justify-between text-xs text-slate-400 font-semibold mb-1">
+                    <span>MASTER VOLUME</span>
+                    <span id="master-vol-lbl">100%</span>
+                </div>
+                <input id="master-volume" type="range" min="0" max="1" step="0.01" value="1" class="w-full h-2 slider-gold">
+            </div>
+        </div>
+
+        <!-- Ovládanie Nahrávania a Aktivácia Audio -->
+        <div class="flex items-center gap-3">
+            <div id="recording-controls" class="hidden flex items-center gap-3 bg-slate-950/80 border border-slate-800 rounded-xl px-4 py-2">
+                <span id="rec-indicator" class="hidden flex items-center gap-2 text-xs font-bold text-red-500 animate-pulse">
+                    <span class="w-2.5 h-2.5 rounded-full bg-red-500"></span> REC <span id="rec-time" class="font-mono">00:00</span>
+                </span>
+                <button id="rec-btn" class="bg-red-600 hover:bg-red-500 text-white font-extrabold px-4 py-2 rounded-lg text-xs orbitron uppercase flex items-center gap-1.5 transition-all shadow-lg active:scale-95">
+                    <i class="fa-solid fa-microphone"></i> Nahrať Mix
+                </button>
+            </div>
+
+            <button id="init-audio-btn" class="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold px-5 py-2.5 rounded-xl shadow-lg transition-all text-xs orbitron uppercase flex items-center gap-2">
+                <i class="fa-solid fa-plug"></i> Aktivovať Zvuk
+            </button>
+        </div>
+    </header>
+
+    <main class="w-full max-w-7xl mx-auto flex-1 grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch mb-6">
+        
+        <!-- DECK A (CYAN NEON) -->
+        <section id="deck-a-container" class="bg-slate-900/60 backdrop-blur border-2 border-slate-800 rounded-3xl p-6 flex flex-col justify-between transition-all duration-300 neon-border-cyan">
+            
+            <!-- Vrchné informácie & Upload -->
+            <div>
+                <div class="flex justify-between items-center mb-4">
+                    <span class="orbitron text-cyan-400 text-2xl font-extrabold tracking-wider neon-text-cyan">DECK A</span>
+                    <span id="deck-a-bpm-display" class="orbitron text-xs bg-cyan-950/80 text-cyan-400 border border-cyan-800 px-3 py-1.5 rounded-lg font-bold">BPM: --</span>
+                </div>
+
+                <!-- Drag & Drop Zone -->
+                <div id="drop-zone-a" class="drop-zone border-2 border-dashed border-slate-700 hover:border-cyan-500/50 bg-slate-950/50 rounded-2xl p-5 text-center transition-all cursor-pointer mb-4 relative overflow-hidden group">
+                    <input type="file" id="file-a" accept="audio/*" class="absolute inset-0 opacity-0 cursor-pointer">
+                    <div class="pointer-events-none space-y-2">
+                        <i class="fa-solid fa-cloud-arrow-up text-cyan-500 text-3xl group-hover:scale-110 transition-transform"></i>
+                        <p class="text-xs font-semibold text-slate-300">Presuň MP3 sem alebo klikni pre výber</p>
+                        <p id="track-name-a" class="text-xs text-cyan-400 font-bold truncate px-4 orbitron">Žiadna skladba</p>
+                    </div>
+                </div>
+
+                <!-- Platňa & Waveform riadok -->
+                <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center mb-4">
+                    <!-- Platňa (Vinyl) -->
+                    <div class="md:col-span-4 flex justify-center">
+                        <div id="vinyl-a" class="w-28 h-28 rounded-full bg-slate-950 border-4 border-slate-800 flex items-center justify-center relative shadow-lg transition-transform">
+                            <div class="absolute inset-2 border border-slate-800/40 rounded-full"></div>
+                            <div class="absolute inset-4 border border-slate-800/50 rounded-full"></div>
+                            <div class="absolute inset-6 border border-slate-800/60 rounded-full"></div>
+                            <div class="w-10 h-10 rounded-full bg-cyan-500 flex items-center justify-center shadow-inner">
+                                <div class="w-2.5 h-2.5 rounded-full bg-slate-950"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Waveform Canvas -->
+                    <div class="md:col-span-8 bg-slate-950 rounded-xl p-2 border border-slate-800 h-28 relative">
+                        <canvas id="waveform-a" class="w-full h-full block"></canvas>
+                        <span id="time-a" class="absolute bottom-1 right-2 text-[10px] font-mono text-cyan-400 bg-slate-950/80 px-1.5 py-0.5 rounded">00:00 / 00:00</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Ovládanie decku -->
+            <div class="space-y-4">
+                <!-- Prehrávanie a hlavné triggery -->
+                <div class="flex items-center justify-between gap-2 bg-slate-950/40 p-3 rounded-2xl border border-slate-800/50">
+                    <div class="flex gap-2">
+                        <button id="play-a" class="w-12 h-12 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 flex items-center justify-center text-lg shadow-lg active:scale-95 transition-all">
+                            <i class="fa-solid fa-play"></i>
+                        </button>
+                        <button id="pause-a" class="w-12 h-12 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center text-lg active:scale-95 transition-all">
+                            <i class="fa-solid fa-pause"></i>
+                        </button>
+                        <button id="stop-a" class="w-12 h-12 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center text-lg active:scale-95 transition-all">
+                            <i class="fa-solid fa-stop"></i>
+                        </button>
+                    </div>
+
+                    <!-- Opakovanie (Loop) -->
+                    <button id="loop-a" class="px-3.5 py-2 rounded-xl border border-slate-700 text-slate-400 hover:text-cyan-400 hover:border-cyan-500 text-xs font-bold transition-all flex items-center gap-1.5">
+                        <i class="fa-solid fa-rotate-left"></i> LOOP
+                    </button>
+                </div>
+
+                <!-- 3-PÁSMOVÝ EKVALIZÉR (EQ) -->
+                <div class="bg-slate-950/60 p-4 rounded-2xl border border-slate-800/80">
+                    <h3 class="text-xs font-bold text-slate-400 mb-3 tracking-wider text-center uppercase">3-pásmový Ekvalizér</h3>
+                    <div class="grid grid-cols-3 gap-3">
+                        <!-- Výšky -->
+                        <div class="flex flex-col items-center">
+                            <span class="text-[10px] text-slate-400 font-bold mb-2">VÝŠKY</span>
+                            <input id="eq-high-a" type="range" min="-12" max="12" step="0.5" value="0" class="h-24 w-2 rounded slider-cyan" style="writing-mode: vertical-lr; direction: rtl;">
+                            <span id="eq-high-val-a" class="text-[10px] font-mono text-cyan-400 mt-2">0 dB</span>
+                        </div>
+                        <!-- Stredy -->
+                        <div class="flex flex-col items-center">
+                            <span class="text-[10px] text-slate-400 font-bold mb-2">STREDY</span>
+                            <input id="eq-mid-a" type="range" min="-12" max="12" step="0.5" value="0" class="h-24 w-2 rounded slider-cyan" style="writing-mode: vertical-lr; direction: rtl;">
+                            <span id="eq-mid-val-a" class="text-[10px] font-mono text-cyan-400 mt-2">0 dB</span>
+                        </div>
+                        <!-- Basy -->
+                        <div class="flex flex-col items-center">
+                            <span class="text-[10px] text-slate-400 font-bold mb-2">BASY</span>
+                            <input id="eq-low-a" type="range" min="-12" max="12" step="0.5" value="0" class="h-24 w-2 rounded slider-cyan" style="writing-mode: vertical-lr; direction: rtl;">
+                            <span id="eq-low-val-a" class="text-[10px] font-mono text-cyan-400 mt-2">0 dB</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VOLTOVÉ & DROP (EXTRÉMNE BASY) -->
+                <div class="bg-slate-950/80 p-3.5 rounded-2xl border border-amber-500/30">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-[11px] font-extrabold text-amber-500 tracking-wider uppercase orbitron flex items-center gap-1">
+                            <i class="fa-solid fa-bolt text-amber-400 animate-pulse"></i> EXTRÉMNE BASY
+                        </span>
+                        <span id="volt-lbl-a" class="text-[10px] font-mono text-amber-400 font-bold">VOLTOVÉ: 0%</span>
+                    </div>
+                    <div class="space-y-3">
+                        <div class="flex items-center gap-2">
+                            <span class="text-[9px] font-bold text-slate-500">ČISTÉ</span>
+                            <input id="volt-a" type="range" min="0" max="100" step="1" value="0" class="flex-1 h-2 slider-gold">
+                            <span class="text-[9px] font-bold text-amber-500">SÝTENIE</span>
+                        </div>
+                        <button id="drop-btn-a" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-red-600 hover:from-amber-500 hover:to-red-500 text-slate-950 font-black text-xs tracking-widest orbitron uppercase shadow-lg shadow-amber-950/50 active:scale-95 transition-all flex items-center justify-center gap-1.5 border border-amber-400/30">
+                            <i class="fa-solid fa-bomb text-sm"></i> SPUSŤ BASS DROP
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Rýchlosť (Tempo / Pitch) -->
+                <div class="bg-slate-950/60 p-4 rounded-2xl border border-slate-800/80">
+                    <div class="flex justify-between text-xs text-slate-400 font-bold mb-2">
+                        <span>TEMPO / RYCHLOSŤ</span>
+                        <span id="pitch-lbl-a" class="text-cyan-400 font-mono">1.00x</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="text-[10px] font-bold text-slate-500">-15%</span>
+                        <input id="pitch-a" type="range" min="0.85" max="1.15" step="0.01" value="1.0" class="flex-1 h-2 slider-cyan">
+                        <span class="text-[10px] font-bold text-slate-500">+15%</span>
+                        <button id="pitch-reset-a" class="text-[10px] font-bold bg-slate-800 px-2 py-1 rounded text-slate-300 hover:bg-cyan-950 hover:text-cyan-400">RESET</button>
+                    </div>
+                    <div class="flex justify-between items-center mt-3 pt-3 border-t border-slate-800/50">
+                        <span class="text-[10px] font-bold text-slate-400">TAP DETEKCIA RYTMA</span>
+                        <button id="tap-a" class="bg-cyan-950 text-cyan-400 border border-cyan-800/60 px-3 py-1 rounded text-[10px] font-bold hover:bg-cyan-900 transition-all">TAP</button>
+                    </div>
+                </div>
+
+                <!-- Volume fader pre Deck A -->
+                <div class="bg-slate-950/60 p-3 rounded-2xl border border-slate-800/80">
+                    <div class="flex justify-between items-center text-xs text-slate-400 font-bold mb-2">
+                        <span>HLASITOSŤ DECKU</span>
+                        <span id="vol-lbl-a" class="text-cyan-400 font-mono">80%</span>
+                    </div>
+                    <input id="volume-a" type="range" min="0" max="1" step="0.01" value="0.8" class="w-full h-2 slider-cyan">
+                </div>
+            </div>
+        </section>
+
+        <!-- DECK B (PINK NEON) -->
+        <section id="deck-b-container" class="bg-slate-900/60 backdrop-blur border-2 border-slate-800 rounded-3xl p-6 flex flex-col justify-between transition-all duration-300 neon-border-magenta">
+            
+            <!-- Vrchné info & Upload -->
+            <div>
+                <div class="flex justify-between items-center mb-4">
+                    <span class="orbitron text-pink-500 text-2xl font-extrabold tracking-wider neon-text-magenta">DECK B</span>
+                    <span id="deck-b-bpm-display" class="orbitron text-xs bg-pink-950/80 text-pink-500 border border-pink-800 px-3 py-1.5 rounded-lg font-bold">BPM: --</span>
+                </div>
+
+                <!-- Drag & Drop Zone -->
+                <div id="drop-zone-b" class="drop-zone-b border-2 border-dashed border-slate-700 hover:border-pink-500/50 bg-slate-950/50 rounded-2xl p-5 text-center transition-all cursor-pointer mb-4 relative overflow-hidden group">
+                    <input type="file" id="file-b" accept="audio/*" class="absolute inset-0 opacity-0 cursor-pointer">
+                    <div class="pointer-events-none space-y-2">
+                        <i class="fa-solid fa-cloud-arrow-up text-pink-500 text-3xl group-hover:scale-110 transition-transform"></i>
+                        <p class="text-xs font-semibold text-slate-300">Presuň MP3 sem alebo klikni pre výber</p>
+                        <p id="track-name-b" class="text-xs text-pink-400 font-bold truncate px-4 orbitron">Žiadna skladba</p>
+                    </div>
+                </div>
+
+                <!-- Platňa & Waveform riadok -->
+                <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center mb-4">
+                    <!-- Platňa (Vinyl) -->
+                    <div class="md:col-span-4 flex justify-center">
+                        <div id="vinyl-b" class="w-28 h-28 rounded-full bg-slate-950 border-4 border-slate-800 flex items-center justify-center relative shadow-lg transition-transform">
+                            <div class="absolute inset-2 border border-slate-800/40 rounded-full"></div>
+                            <div class="absolute inset-4 border border-slate-800/50 rounded-full"></div>
+                            <div class="absolute inset-6 border border-slate-800/60 rounded-full"></div>
+                            <div class="w-10 h-10 rounded-full bg-pink-500 flex items-center justify-center shadow-inner">
+                                <div class="w-2.5 h-2.5 rounded-full bg-slate-950"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Waveform Canvas -->
+                    <div class="md:col-span-8 bg-slate-950 rounded-xl p-2 border border-slate-800 h-28 relative">
+                        <canvas id="waveform-b" class="w-full h-full block"></canvas>
+                        <span id="time-b" class="absolute bottom-1 right-2 text-[10px] font-mono text-pink-400 bg-slate-950/80 px-1.5 py-0.5 rounded">00:00 / 00:00</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Ovládanie decku -->
+            <div class="space-y-4">
+                <!-- Prehrávanie a hlavné triggery -->
+                <div class="flex items-center justify-between gap-2 bg-slate-950/40 p-3 rounded-2xl border border-slate-800/50">
+                    <div class="flex gap-2">
+                        <button id="play-b" class="w-12 h-12 rounded-xl bg-pink-500 hover:bg-pink-400 text-slate-950 flex items-center justify-center text-lg shadow-lg active:scale-95 transition-all">
+                            <i class="fa-solid fa-play"></i>
+                        </button>
+                        <button id="pause-b" class="w-12 h-12 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center text-lg active:scale-95 transition-all">
+                            <i class="fa-solid fa-pause"></i>
+                        </button>
+                        <button id="stop-b" class="w-12 h-12 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center text-lg active:scale-95 transition-all">
+                            <i class="fa-solid fa-stop"></i>
+                        </button>
+                    </div>
+
+                    <!-- Opakovanie (Loop) -->
+                    <button id="loop-b" class="px-3.5 py-2 rounded-xl border border-slate-700 text-slate-400 hover:text-pink-400 hover:border-pink-500 text-xs font-bold transition-all flex items-center gap-1.5">
+                        <i class="fa-solid fa-rotate-left"></i> LOOP
+                    </button>
+                </div>
+
+                <!-- 3-PÁSMOVÝ EKVALIZÉR (EQ) -->
+                <div class="bg-slate-950/60 p-4 rounded-2xl border border-slate-800/80">
+                    <h3 class="text-xs font-bold text-slate-400 mb-3 tracking-wider text-center uppercase">3-pásmový Ekvalizér</h3>
+                    <div class="grid grid-cols-3 gap-3">
+                        <!-- Výšky -->
+                        <div class="flex flex-col items-center">
+                            <span class="text-[10px] text-slate-400 font-bold mb-2">VÝŠKY</span>
+                            <input id="eq-high-b" type="range" min="-12" max="12" step="0.5" value="0" class="h-24 w-2 rounded slider-magenta" style="writing-mode: vertical-lr; direction: rtl;">
+                            <span id="eq-high-val-b" class="text-[10px] font-mono text-pink-400 mt-2">0 dB</span>
+                        </div>
+                        <!-- Stredy -->
+                        <div class="flex flex-col items-center">
+                            <span class="text-[10px] text-slate-400 font-bold mb-2">STREDY</span>
+                            <input id="eq-mid-b" type="range" min="-12" max="12" step="0.5" value="0" class="h-24 w-2 rounded slider-magenta" style="writing-mode: vertical-lr; direction: rtl;">
+                            <span id="eq-mid-val-b" class="text-[10px] font-mono text-pink-400 mt-2">0 dB</span>
+                        </div>
+                        <!-- Basy -->
+                        <div class="flex flex-col items-center">
+                            <span class="text-[10px] text-slate-400 font-bold mb-2">BASY</span>
+                            <input id="eq-low-b" type="range" min="-12" max="12" step="0.5" value="0" class="h-24 w-2 rounded slider-magenta" style="writing-mode: vertical-lr; direction: rtl;">
+                            <span id="eq-low-val-b" class="text-[10px] font-mono text-pink-400 mt-2">0 dB</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VOLTOVÉ & DROP (EXTRÉMNE BASY) -->
+                <div class="bg-slate-950/80 p-3.5 rounded-2xl border border-amber-500/30">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-[11px] font-extrabold text-amber-500 tracking-wider uppercase orbitron flex items-center gap-1">
+                            <i class="fa-solid fa-bolt text-amber-400 animate-pulse"></i> EXTRÉMNE BASY
+                        </span>
+                        <span id="volt-lbl-b" class="text-[10px] font-mono text-amber-400 font-bold">VOLTOVÉ: 0%</span>
+                    </div>
+                    <div class="space-y-3">
+                        <div class="flex items-center gap-2">
+                            <span class="text-[9px] font-bold text-slate-500">ČISTÉ</span>
+                            <input id="volt-b" type="range" min="0" max="100" step="1" value="0" class="flex-1 h-2 slider-gold">
+                            <span class="text-[9px] font-bold text-amber-500">SÝTENIE</span>
+                        </div>
+                        <button id="drop-btn-b" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-red-600 hover:from-amber-500 hover:to-red-500 text-slate-950 font-black text-xs tracking-widest orbitron uppercase shadow-lg shadow-amber-950/50 active:scale-95 transition-all flex items-center justify-center gap-1.5 border border-amber-400/30">
+                            <i class="fa-solid fa-bomb text-sm"></i> SPUSŤ BASS DROP
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Rýchlosť (Tempo / Pitch) -->
+                <div class="bg-slate-950/60 p-4 rounded-2xl border border-slate-800/80">
+                    <div class="flex justify-between text-xs text-slate-400 font-bold mb-2">
+                        <span>TEMPO / RYCHLOSŤ</span>
+                        <span id="pitch-lbl-b" class="text-pink-400 font-mono">1.00x</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="text-[10px] font-bold text-slate-500">-15%</span>
+                        <input id="pitch-b" type="range" min="0.85" max="1.15" step="0.01" value="1.0" class="flex-1 h-2 slider-magenta">
+                        <span class="text-[10px] font-bold text-slate-500">+15%</span>
+                        <button id="pitch-reset-b" class="text-[10px] font-bold bg-slate-800 px-2 py-1 rounded text-slate-300 hover:bg-pink-950 hover:text-pink-400">RESET</button>
+                    </div>
+                    <div class="flex justify-between items-center mt-3 pt-3 border-t border-slate-800/50">
+                        <span class="text-[10px] font-bold text-slate-400">TAP DETEKCIA RYTMA</span>
+                        <button id="tap-b" class="bg-pink-950 text-pink-400 border border-pink-800/60 px-3 py-1 rounded text-[10px] font-bold hover:bg-pink-900 transition-all">TAP</button>
+                    </div>
+                </div>
+
+                <!-- Volume fader pre Deck B -->
+                <div class="bg-slate-950/60 p-3 rounded-2xl border border-slate-800/80">
+                    <div class="flex justify-between items-center text-xs text-slate-400 font-bold mb-2">
+                        <span>HLASITOSŤ DECKU</span>
+                        <span id="vol-lbl-b" class="text-pink-400 font-mono">80%</span>
+                    </div>
+                    <input id="volume-b" type="range" min="0" max="1" step="0.01" value="0.8" class="w-full h-2 slider-magenta">
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="w-full max-w-7xl mx-auto bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-2xl relative">
+        <div class="max-w-md mx-auto">
+            <div class="flex justify-between items-center text-xs font-bold text-slate-400 mb-2 tracking-wider">
+                <span class="text-cyan-400 neon-text-cyan">DECK A</span>
+                <span>CROSSFADER</span>
+                <span class="text-pink-500 neon-text-magenta">DECK B</span>
+            </div>
+            
+            <div class="flex items-center gap-4">
+                <span class="text-xs font-mono font-bold text-cyan-400/80">L</span>
+                <input id="crossfader" type="range" min="-1" max="1" step="0.02" value="0" class="w-full h-3 bg-slate-950 rounded-full slider-gold cursor-pointer">
+                <span class="text-xs font-mono font-bold text-pink-400/80">R</span>
+            </div>
+            
+            <!-- Pomer crossfadera pre info -->
+            <div class="text-center mt-2">
+                <span id="crossfader-lbl" class="text-[10px] font-mono text-slate-500 font-semibold">STRED (50% / 50%)</span>
+            </div>
+        </div>
+        
+        <div class="absolute bottom-1 right-3 text-[9px] text-slate-600 hidden md:block">
+            Kompletne lokálne spracovanie bez odosielania dát na servery.
+        </div>
+    </footer>
+
+    <!-- Modal pre asynchrónne MP3 Kódovanie -->
+    <div id="encoding-modal" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center z-50 hidden">
+        <div class="bg-slate-900 border border-slate-800 rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl relative neon-border-cyan">
+            <div class="animate-spin text-cyan-400 text-4xl mb-4">
+                <i class="fa-solid fa-compact-disc"></i>
+            </div>
+            <h3 class="orbitron text-lg font-bold text-cyan-400 mb-2 neon-text-cyan">KÓDUJEM VYSOKOKVALITNÉ MP3</h3>
+            <p class="text-xs text-slate-400 mb-6 font-semibold">Ukladám váš DJ mix s tokom 320 kbps...</p>
+            
+            <div class="w-full bg-slate-950 h-3 rounded-full overflow-hidden mb-3 border border-slate-800">
+                <div id="encoding-progress-bar" class="bg-gradient-to-r from-cyan-400 to-fuchsia-500 h-full w-0 transition-all duration-75"></div>
+            </div>
+            <div id="encoding-percentage" class="orbitron text-sm font-bold text-fuchsia-400">0%</div>
+        </div>
+    </div>
+
+    <!-- Informačná notifikácia -->
+    <div id="toast-container" class="fixed bottom-6 left-6 z-50 pointer-events-none"></div>
+
+    <script>
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `p-4 mb-3 rounded-xl shadow-2xl border transition-all duration-300 transform translate-y-2 opacity-0 text-xs font-bold max-w-xs flex items-center gap-2 pointer-events-auto`;
+            
+            if (type === 'cyan') {
+                toast.className += ' bg-slate-900 border-cyan-500/50 text-cyan-400';
+            } else if (type === 'pink') {
+                toast.className += ' bg-slate-900 border-pink-500/50 text-pink-400';
+            } else if (type === 'success') {
+                toast.className += ' bg-slate-900 border-emerald-500/50 text-emerald-400';
+            } else {
+                toast.className += ' bg-slate-900 border-amber-500/50 text-amber-400';
+            }
+
+            toast.innerHTML = `<i class="fa-solid fa-circle-info"></i> <span>${message}</span>`;
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            }, 50);
+
+            setTimeout(() => {
+                toast.classList.add('translate-y-2', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+
+        // --- HLAVNÉ AUDIO A NAHRÁVACIE PARAMETRE ---
+        let audioCtx = null;
+        let masterGain = null;
+
+        // Nahrávanie
+        let isRecording = false;
+        let recordedChunksL = [];
+        let recordedChunksR = [];
+        let recordingLength = 0;
+        let recorderNode = null;
+        let recInterval = null;
+        let recStartTime = 0;
+
+        // Držanie stavu deckov
+        const decks = {
+            a: {
+                audio: null,
+                source: null,
+                eqLow: null,
+                eqMid: null,
+                eqHigh: null,
+                saturator: null, // Uzol pre Voltové sýtenie basov
+                gain: null,
+                xfadeGain: null,
+                analyser: null,
+                canvas: null,
+                canvasCtx: null,
+                baseBpm: 0,
+                currentBpm: 0,
+                tapTimes: [],
+                isPlaying: false
+            },
+            b: {
+                audio: null,
+                source: null,
+                eqLow: null,
+                eqMid: null,
+                eqHigh: null,
+                saturator: null, // Uzol pre Voltové sýtenie basov
+                gain: null,
+                xfadeGain: null,
+                analyser: null,
+                canvas: null,
+                canvasCtx: null,
+                baseBpm: 0,
+                currentBpm: 0,
+                tapTimes: [],
+                isPlaying: false
+            }
+        };
+
+        // --- SATURAČNÁ FUNKCIA PRE ANALÓGOVÝ CHARAKTER BASOV (VOLTOVÉ) ---
+        function getDistortionCurve(amount) {
+            const k = amount;
+            const n_samples = 44100;
+            const curve = new Float32Array(n_samples);
+            for (let i = 0; i < n_samples; ++i) {
+                const x = (i * 2) / n_samples - 1;
+                if (k === 0) {
+                    curve[i] = x;
+                } else {
+                    // Soft-clipping sigmoidová funkcia pre simuláciu analógovej saturácie
+                    curve[i] = Math.tanh(x * (1 + k * 0.025)) / Math.tanh(1 + k * 0.025);
+                }
+            }
+            return curve;
+        }
+
+        // --- SUB-BASS GENERÁTOR (BASS DROP) ---
+        function triggerSubDrop(deckId) {
+            initAudio(); // Uistenie sa o aktivite AudioContextu
+            if (!audioCtx) return;
+
+            const osc = audioCtx.createOscillator();
+            const subOsc = audioCtx.createOscillator();
+            const oscGain = audioCtx.createGain();
+            const lpFilter = audioCtx.createBiquadFilter();
+
+            osc.type = 'sine';
+            subOsc.type = 'triangle'; // Pridáva harmonické pre lepšiu čitateľnosť aj na slabších repro
+
+            const now = audioCtx.currentTime;
+
+            // Extrémny plynulý sweep z 85 Hz na sub-basových 24 Hz
+            osc.frequency.setValueAtTime(85, now);
+            osc.frequency.exponentialRampToValueAtTime(24, now + 2.2);
+
+            subOsc.frequency.setValueAtTime(42, now);
+            subOsc.frequency.exponentialRampToValueAtTime(20, now + 2.2);
+
+            // Dolnopriepustný filter odreže všetok nežiaduci šum nad 100 Hz
+            lpFilter.type = 'lowpass';
+            lpFilter.frequency.setValueAtTime(100, now);
+
+            // Dynamická obálka pre zamedzenie pukania a silný ráz
+            oscGain.gain.setValueAtTime(0, now);
+            oscGain.gain.linearRampToValueAtTime(1.6, now + 0.08); // Úderný attack
+            oscGain.gain.exponentialRampToValueAtTime(0.001, now + 2.2); // Hladké doznievanie
+
+            osc.connect(lpFilter);
+            subOsc.connect(lpFilter);
+            lpFilter.connect(oscGain);
+            
+            // Smerovanie priamo do chráneného masterGainu (pod dohľadom limitera)
+            oscGain.connect(masterGain);
+
+            osc.start(now);
+            subOsc.start(now);
+            osc.stop(now + 2.3);
+            subOsc.stop(now + 2.3);
+
+            // Vizuálny efekt otrasu decku pri dropu
+            const container = document.getElementById(`deck-${deckId}-container`);
+            container.classList.add('scale-[1.02]', 'border-amber-500');
+            showToast(`🔥 MASÍVNY SUB-BASS DROP NA DECKE ${deckId.toUpperCase()}!`, 'success');
+            setTimeout(() => {
+                container.classList.remove('scale-[1.02]', 'border-amber-500');
+            }, 300);
+        }
+
+        // --- STREAMING_CHUNK: Inicializácia hlavného zvukového reťazca, limitera a nahrávacieho uzla ---
+        function initAudio() {
+            if (audioCtx) return; // Už bolo zinicializované
+
+            try {
+                // Vytvorenie Audio Contextu
+                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                audioCtx = new AudioContextClass();
+                
+                // Master Gain (Celková hlasitosť)
+                masterGain = audioCtx.createGain();
+                masterGain.gain.setValueAtTime(1.0, audioCtx.currentTime);
+                
+                // Profesionálny limiter na zabránenie prebudenia a chrapčania basov
+                const limiter = audioCtx.createDynamicsCompressor();
+                limiter.threshold.setValueAtTime(-1.0, audioCtx.currentTime); // Limitovanie pod digitálnou nulou 0dB
+                limiter.knee.setValueAtTime(2.0, audioCtx.currentTime);       // Zaoblenie krivky pre plynulú kompresiu
+                limiter.ratio.setValueAtTime(20.0, audioCtx.currentTime);     // Silný pomer limitovania
+                limiter.attack.setValueAtTime(0.003, audioCtx.currentTime);   // Okamžitá reakcia (3ms)
+                limiter.release.setValueAtTime(0.05, audioCtx.currentTime);   // Rýchly návrat hlasitosti (50ms)
+
+                // Vytvorenie tichého nahrávacieho uzla
+                setupRecorder();
+
+                // Smerovanie: Master Gain -> Master Limiter -> Passthrough Recorder -> Fyzický výstup repro
+                masterGain.connect(limiter);
+                limiter.connect(recorderNode);
+                recorderNode.connect(audioCtx.destination);
+                
+                // Konfigurácia pre obidva decky
+                setupDeckAudio('a');
+                setupDeckAudio('b');
+
+                document.getElementById('init-audio-btn').classList.add('hidden');
+                document.getElementById('recording-controls').classList.remove('hidden');
+                showToast("Web Audio API úspešne aktivované s ochranným Limiterom!", "success");
+            } catch (e) {
+                console.error("Chyba pri štarte Web Audio API:", e);
+                showToast("Váš prehliadač nepodporuje Web Audio API", "error");
+            }
+        }
+
+        // --- INICIALIZÁCIA RECORDERA (PASSTHROUGH SCRIPTPROCESSOR) ---
+        function setupRecorder() {
+            if (!audioCtx) return;
+            // 4096 veľkosť buffra, 2 vstupné kanály, 2 výstupné kanály pre priechodný tok bez oneskorenia
+            recorderNode = audioCtx.createScriptProcessor(4096, 2, 2);
+            
+            recorderNode.onaudioprocess = function(e) {
+                let inputL = e.inputBuffer.getChannelData(0);
+                let inputR = e.inputBuffer.getChannelData(1);
+                
+                // Presmerovanie priamo na reproduktory
+                let outputL = e.outputBuffer.getChannelData(0);
+                let outputR = e.outputBuffer.getChannelData(1);
+                outputL.set(inputL);
+                outputR.set(inputR);
+                
+                // Ak nahrávame, uchováme nespracované audio vzorky
+                if (isRecording) {
+                    recordedChunksL.push(new Float32Array(inputL));
+                    recordedChunksR.push(new Float32Array(inputR));
+                    recordingLength += inputL.length;
+                }
+            };
+        }
+
+        // --- STREAMING_CHUNK: Správa štartu/stopu nahrávania a asynchrónne kódovanie do MP3 ---
+        function toggleRecording() {
+            initAudio();
+            if (!isRecording) {
+                // Štart nahrávania
+                recordedChunksL = [];
+                recordedChunksR = [];
+                recordingLength = 0;
+                isRecording = true;
+                recStartTime = Date.now();
+                
+                document.getElementById('rec-indicator').classList.remove('hidden');
+                const recBtn = document.getElementById('rec-btn');
+                recBtn.innerHTML = `<i class="fa-solid fa-stop"></i> Stop & Uložiť`;
+                recBtn.classList.remove('bg-red-600', 'hover:bg-red-500');
+                recBtn.classList.add('bg-amber-600', 'hover:bg-amber-500');
+                
+                showToast("🔴 Nahrávanie mixu spustené!", "success");
+                
+                recInterval = setInterval(() => {
+                    let diff = Date.now() - recStartTime;
+                    let m = Math.floor(diff / 60000).toString().padStart(2, '0');
+                    let s = Math.floor((diff % 60000) / 1000).toString().padStart(2, '0');
+                    document.getElementById('rec-time').innerText = `${m}:${s}`;
+                }, 1000);
+            } else {
+                // Koniec nahrávania
+                isRecording = false;
+                clearInterval(recInterval);
+                document.getElementById('rec-indicator').classList.add('hidden');
+                
+                const recBtn = document.getElementById('rec-btn');
+                recBtn.innerHTML = `<i class="fa-solid fa-microphone"></i> Nahrať Mix`;
+                recBtn.classList.remove('bg-amber-600', 'hover:bg-amber-500');
+                recBtn.classList.add('bg-red-600', 'hover:bg-red-500');
+                
+                if (recordingLength === 0) {
+                    showToast("Chyba: Nebol zaznamenaný žiaden zvuk!", "warning");
+                    return;
+                }
+
+                showToast("Nahrávanie zastavené. Spúšťam export...", "success");
+                exportToMP3();
+            }
+        }
+
+        // Pomocné funkcie pre prepočet a zarovnanie stereo kanálov
+        function flattenChannel(channelChunks, totalLength) {
+            let result = new Float32Array(totalLength);
+            let offset = 0;
+            for (let i = 0; i < channelChunks.length; i++) {
+                result.set(channelChunks[i], offset);
+                offset += channelChunks[i].length;
+            }
+            return result;
+        }
+
+        function floatTo16BitPCM(input) {
+            let output = new Int16Array(input.length);
+            for (let i = 0; i < input.length; i++) {
+                let s = Math.max(-1, Math.min(1, input[i]));
+                output[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+            }
+            return output;
+        }
+
+        // --- ASYNCHRÓNNE KÓDOVANIE DO VYSOKOKVALITNÉHO MP3 (320kbps) ---
+        function exportToMP3() {
+            if (recordingLength === 0) return;
+            
+            const modal = document.getElementById('encoding-modal');
+            const progressBar = document.getElementById('encoding-progress-bar');
+            const percentText = document.getElementById('encoding-percentage');
+            
+            modal.classList.remove('hidden');
+            progressBar.style.width = '0%';
+            percentText.innerText = '0%';
+            
+            // Oneskorenie kvôli plynulému vykresleniu modalu
+            setTimeout(() => {
+                // Spojenie všetkých zaznamenaných kúskov audia do jedného poľa
+                const flatL = flattenChannel(recordedChunksL, recordingLength);
+                const flatR = flattenChannel(recordedChunksR, recordingLength);
+                
+                // Konverzia Float32 vzoriek z Web Audio API na štandardné 16-bit PCM (Int16)
+                const pcmL = floatTo16BitPCM(flatL);
+                const pcmR = floatTo16BitPCM(flatR);
+                
+                // Spustenie MP3 enkódera na 2 kanály (Stereo), 44.1kHz s tokom 320 kbps (Najvyššia možná kvalita)
+                const mp3encoder = new lamejs.Mp3Encoder(2, 44100, 320);
+                const mp3Data = [];
+                
+                const sampleBlockSize = 1152;
+                let index = 0;
+                
+                // Postupné kódovanie po častiach, aby sa nezasekol hlavný prehliadačový proces
+                function encodeChunk() {
+                    if (index < pcmL.length) {
+                        let end = Math.min(index + sampleBlockSize, pcmL.length);
+                        let leftChunk = pcmL.subarray(index, end);
+                        let rightChunk = pcmR.subarray(index, end);
+                        
+                        let mp3buf = mp3encoder.encodeBuffer(leftChunk, rightChunk);
+                        if (mp3buf.length > 0) {
+                            mp3Data.push(mp3buf);
+                        }
+                        
+                        index += sampleBlockSize;
+                        
+                        // Aktualizácia stavu postupu v UI
+                        let progress = Math.min(100, Math.round((index / pcmL.length) * 100));
+                        progressBar.style.width = `${progress}%`;
+                        percentText.innerText = `${progress}%`;
+                        
+                        requestAnimationFrame(encodeChunk);
+                    } else {
+                        // Uzatvorenie enkódera
+                        let mp3buf = mp3encoder.flush();
+                        if (mp3buf.length > 0) {
+                            mp3Data.push(new Int8Array(mp3buf));
+                        }
+                        
+                        // Zostavenie binárneho súboru (Blob)
+                        const blob = new Blob(mp3Data, { type: 'audio/mp3' });
+                        const url = URL.createObjectURL(blob);
+                        
+                        // Automatické stiahnutie súboru
+                        const a = document.createElement('a');
+                        a.style.display = 'none';
+                        a.href = url;
+                        const date = new Date().toISOString().slice(0, 10);
+                        a.download = `slovakia-club-mix-${date}.mp3`;
+                        document.body.appendChild(a);
+                        a.click();
+                        
+                        // Vyčistenie
+                        setTimeout(() => {
+                            document.body.removeChild(a);
+                            URL.revokeObjectURL(url);
+                            modal.classList.add('hidden');
+                            showToast("Mix bol úspešne uložený ako 320 kbps MP3!", "success");
+                        }, 500);
+                    }
+                }
+                
+                encodeChunk();
+            }, 100);
+        }
+
+        // --- STREAMING_CHUNK: Konfigurácia zapojenia deckov (saturátor, volume, EQ filtre, pan) ---
+        function setupDeckAudio(id) {
+            const deck = decks[id];
+            
+            // Vytvorenie skrytého HTML5 audio elementu
+            const audio = new Audio();
+            audio.crossOrigin = "anonymous";
+            audio.loop = false;
+            deck.audio = audio;
+
+            // Audio zdroj
+            deck.source = audioCtx.createMediaElementSource(audio);
+
+            // Biquad filtre (EQ)
+            // Basy (Low Shelf)
+            deck.eqLow = audioCtx.createBiquadFilter();
+            deck.eqLow.type = 'lowshelf';
+            deck.eqLow.frequency.value = 250; // Deliaca frekvencia 250Hz
+
+            // Stredy (Peaking Bandpass)
+            deck.eqMid = audioCtx.createBiquadFilter();
+            deck.eqMid.type = 'peaking';
+            deck.eqMid.Q.value = 1.0;
+            deck.eqMid.frequency.value = 1000; // Centrovacia frekvencia 1kHz
+
+            // Výšky (High Shelf)
+            deck.eqHigh = audioCtx.createBiquadFilter();
+            deck.eqHigh.type = 'highshelf';
+            deck.eqHigh.frequency.value = 4000; // Deliaca frekvencia 4kHz
+
+            deck.saturator = audioCtx.createWaveShaper();
+            deck.saturator.curve = getDistortionCurve(0);
+            deck.saturator.oversample = '4x'; // Oversampling čistí výšky od digitálneho aliasingu
+
+            // Gain (Hlasitosť jednotlivého decku)
+            deck.gain = audioCtx.createGain();
+            const initGainVal = parseFloat(document.getElementById(`volume-${id}`).value);
+            deck.gain.gain.setValueAtTime(initGainVal, audioCtx.currentTime);
+
+            // Crossfader Gain (Hlasitosť podľa polohy crossfadera)
+            deck.xfadeGain = audioCtx.createGain();
+            deck.xfadeGain.gain.setValueAtTime(1.0, audioCtx.currentTime);
+
+            // Analyser (Pre vykresľovanie vĺn)
+            deck.analyser = audioCtx.createAnalyser();
+            deck.analyser.fftSize = 512;
+
+            // Prepojenie reťazca:
+            // Skladba -> EQ High -> EQ Mid -> EQ Low -> Saturator (Voltové sýtenie) -> Volume -> Crossfade -> Analyser -> Master Gain
+            deck.source.connect(deck.eqHigh);
+            deck.eqHigh.connect(deck.eqMid);
+            deck.eqMid.connect(deck.eqLow);
+            deck.eqLow.connect(deck.saturator);
+            deck.saturator.connect(deck.gain);
+            deck.gain.connect(deck.xfadeGain);
+            deck.xfadeGain.connect(deck.analyser);
+            deck.analyser.connect(masterGain);
+
+            // Spustenie animácie vizualizéra pre tento deck
+            requestAnimationFrame(() => drawWaveform(id));
+
+            // Priradenie natívnych HTML audio eventov na aktualizáciu UI
+            audio.addEventListener('timeupdate', () => updateProgress(id));
+            audio.addEventListener('ended', () => {
+                deck.isPlaying = false;
+                document.getElementById(`vinyl-${id}`).classList.remove('spinning');
+            });
+        }
+
+        function updateProgress(id) {
+            const deck = decks[id];
+            if (!deck.audio) return;
+            
+            const cur = deck.audio.currentTime;
+            const dur = deck.audio.duration || 0;
+            
+            const formatTime = (time) => {
+                const m = Math.floor(time / 60).toString().padStart(2, '0');
+                const s = Math.floor(time % 60).toString().padStart(2, '0');
+                return `${m}:${s}`;
+            };
+            
+            document.getElementById(`time-${id}`).innerText = `${formatTime(cur)} / ${formatTime(dur)}`;
+        }
+
+        // --- STREAMING_CHUNK: Pokročilá analýza BPM pre rytmickú presnosť a synchronizáciu ---
+        async function analyzeBPM(file, id) {
+            if (!audioCtx) return;
+            
+            const deck = decks[id];
+            try {
+                // Analyzujeme len prvých 30 sekúnd na šetrenie pamäte
+                const offlineCtx = new OfflineAudioContext(1, 44100 * 30, 44100);
+                const arrayBuffer = await file.arrayBuffer();
+                const audioBuffer = await offlineCtx.decodeAudioData(arrayBuffer);
+                const data = audioBuffer.getChannelData(0);
+                
+                // Hľadanie energetických špičiek (basy)
+                let threshold = 0.75;
+                let peaks = [];
+                for (let i = 0; i < data.length; i++) {
+                    if (Math.abs(data[i]) > threshold) {
+                        peaks.push(i);
+                        // Ignorujeme ďalších 0.28 sekúnd (zabráni zachytávaniu rovnakého úderu, max ~215 BPM)
+                        i += Math.floor(44100 * 0.28); 
+                    }
+                }
+                
+                // Ak sme nenašli dosť vrcholov, znížime prah a skúsime znova
+                if (peaks.length < 12) {
+                    threshold = 0.45;
+                    peaks = [];
+                    for (let i = 0; i < data.length; i++) {
+                        if (Math.abs(data[i]) > threshold) {
+                            peaks.push(i);
+                            i += Math.floor(44100 * 0.28);
+                        }
+                    }
+                }
+
+                if (peaks.length < 2) {
+                    // Nepodarilo sa spoľahlivo zistiť, nastavíme predvolených 128
+                    setBpm(128, id);
+                    return;
+                }
+
+                // Vypočítame intervaly medzi špičkami v samploch
+                const intervals = [];
+                for (let i = 1; i < peaks.length; i++) {
+                    intervals.push(peaks[i] - peaks[i - 1]);
+                }
+
+                // Priemerný interval
+                const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+                let bpm = Math.round(60 / (avgInterval / 44100));
+                
+                // Normalizujeme do typických DJ limitov (65 - 165 BPM)
+                while (bpm < 65) bpm *= 2;
+                while (bpm > 165) bpm /= 2;
+
+                setBpm(bpm, id);
+                showToast(`Zistené BPM pre Deck ${id.toUpperCase()}: ${bpm}`, id === 'a' ? 'cyan' : 'pink');
+            } catch (e) {
+                console.error("Nepodarilo sa dekódovať audio pre BPM:", e);
+                setBpm(120, id); // Fallback
+            }
+        }
+
+        function setBpm(val, id) {
+            decks[id].baseBpm = val;
+            updatePitchBpm(id);
+        }
+
+        function updatePitchBpm(id) {
+            const deck = decks[id];
+            const pitchSliderValue = parseFloat(document.getElementById(`pitch-${id}`).value);
+            
+            if (deck.audio) {
+                deck.audio.playbackRate = pitchSliderValue;
+            }
+            
+            document.getElementById(`pitch-lbl-${id}`).innerText = `${pitchSliderValue.toFixed(2)}x`;
+            
+            if (deck.baseBpm > 0) {
+                deck.currentBpm = Math.round(deck.baseBpm * pitchSliderValue);
+                document.getElementById(`deck-${id}-bpm-display`).innerText = `BPM: ${deck.currentBpm}`;
+            } else {
+                document.getElementById(`deck-${id}-bpm-display`).innerText = `BPM: --`;
+            }
+
+            // Prispôsobenie rotácie vinylu rýchlosti prehrávania
+            const vinyl = document.getElementById(`vinyl-${id}`);
+            if (deck.isPlaying) {
+                const duration = 3 / pitchSliderValue; // Štandard 3 sekundy na otočenie pri 1.0x
+                vinyl.style.animationDuration = `${duration}s`;
+            }
+        }
+
+        function handleFileSelect(file, id) {
+            initAudio(); // Uistenie sa o aktivite AudioContextu
+
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const deck = decks[id];
+                
+                // Zastavíme aktuálne prehrávanie ak nejaké je
+                deck.audio.pause();
+                deck.isPlaying = false;
+                document.getElementById(`vinyl-${id}`).classList.remove('spinning');
+
+                // Vytvorenie a priradenie URL
+                const fileURL = URL.createObjectURL(file);
+                deck.audio.src = fileURL;
+                deck.audio.load();
+
+                // Prepíšeme názov v UI
+                document.getElementById(`track-name-${id}`).innerText = file.name;
+                
+                // Odštartujeme BPM analýzu
+                document.getElementById(`deck-${id}-bpm-display`).innerText = `BPM: Počítam...`;
+                analyzeBPM(file, id);
+                
+                showToast(`Skladba nahraná do Decku ${id.toUpperCase()}`, id === 'a' ? 'cyan' : 'pink');
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function drawWaveform(id) {
+            const deck = decks[id];
+            const canvas = document.getElementById(`waveform-${id}`);
+            
+            if (!canvas) return;
+            const canvasCtx = canvas.getContext('2d');
+            
+            // Nastavenie rozmerov podľa elementu (podpora responzivity)
+            const width = canvas.clientWidth;
+            const height = canvas.clientHeight;
+            if (canvas.width !== width || canvas.height !== height) {
+                canvas.width = width;
+                canvas.height = height;
+            }
+
+            const bufferLength = deck.analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+
+            function draw() {
+                requestAnimationFrame(draw);
+                
+                if (!audioCtx) return;
+
+                // Načítanie dát v reálnom čase (používame time-domain na zobrazenie vĺn)
+                deck.analyser.getByteTimeDomainData(dataArray);
+
+                // Čistenie canvasu s jemným gradientom pozadia
+                canvasCtx.fillStyle = '#020617';
+                canvasCtx.fillRect(0, 0, width, height);
+
+                // Mriežka v pozadí
+                canvasCtx.strokeStyle = 'rgba(30, 41, 59, 0.4)';
+                canvasCtx.lineWidth = 1;
+                for (let i = 0; i < width; i += 30) {
+                    canvasCtx.beginPath();
+                    canvasCtx.moveTo(i, 0);
+                    canvasCtx.lineTo(i, height);
+                    canvasCtx.stroke();
+                }
+
+                // Farba vlny pre Deck A a B
+                const glowColor = id === 'a' ? '#00f0ff' : '#ff007f';
+                const shadowColor = id === 'a' ? 'rgba(6, 182, 212, 0.6)' : 'rgba(236, 72, 153, 0.6)';
+
+                canvasCtx.lineWidth = 2.5;
+                canvasCtx.strokeStyle = glowColor;
+                canvasCtx.shadowBlur = deck.isPlaying ? 12 : 3;
+                canvasCtx.shadowColor = shadowColor;
+
+                canvasCtx.beginPath();
+
+                const sliceWidth = width * 1.0 / bufferLength;
+                let x = 0;
+
+                for (let i = 0; i < bufferLength; i++) {
+                    const v = dataArray[i] / 128.0;
+                    const y = v * height / 2;
+
+                    if (i === 0) {
+                        canvasCtx.moveTo(x, y);
+                    } else {
+                        canvasCtx.lineTo(x, y);
+                    }
+
+                    x += sliceWidth;
+                }
+
+                canvasCtx.lineTo(canvas.width, canvas.height / 2);
+                canvasCtx.stroke();
+                
+                // Vypnutie tieňa pre optimálny výkon
+                canvasCtx.shadowBlur = 0;
+            }
+
+            draw();
+        }
+
+        function updateCrossfader() {
+            if (!audioCtx) return;
+
+            const value = parseFloat(document.getElementById('crossfader').value); // interval [-1, 1]
+            const x = (value + 1) / 2; // prepočet na interval [0, 1]
+
+            // Equal power crossfade rovnica
+            const gainA = Math.cos(x * Math.PI / 2);
+            const gainB = Math.sin(x * Math.PI / 2);
+
+            decks.a.xfadeGain.gain.setValueAtTime(gainA, audioCtx.currentTime);
+            decks.b.xfadeGain.gain.setValueAtTime(gainB, audioCtx.currentTime);
+
+            // Popisok polohy
+            const lbl = document.getElementById('crossfader-lbl');
+            const percentA = Math.round(gainA * 100);
+            const percentB = Math.round(gainB * 100);
+            
+            if (value === 0) {
+                lbl.innerText = "STRED (50% / 50%)";
+                lbl.className = "text-[10px] font-mono text-amber-500 font-bold";
+            } else if (value < 0) {
+                lbl.innerText = `DOĽAVA (A: ${percentA}% / B: ${percentB}%)`;
+                lbl.className = "text-[10px] font-mono text-cyan-400 font-semibold";
+            } else {
+                lbl.innerText = `DOPRAVA (A: ${percentA}% / B: ${percentB}%)`;
+                lbl.className = "text-[10px] font-mono text-pink-500 font-semibold";
+            }
+        }
+
+        // --- STREAMING_CHUNK: Priradenie všetkých klikovateľných a posuvných UI elementov na eventy ---
+        window.addEventListener('DOMContentLoaded', () => {
+
+            // Drag & Drop zóny
+            ['a', 'b'].forEach(id => {
+                const zone = document.getElementById(`drop-zone-${id}`);
+                const fileInput = document.getElementById(`file-${id}`);
+
+                zone.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    zone.classList.add('dragover');
+                });
+
+                zone.addEventListener('dragleave', () => {
+                    zone.classList.remove('dragover');
+                });
+
+                zone.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    zone.classList.remove('dragover');
+                    const files = e.dataTransfer.files;
+                    if (files.length > 0) {
+                        handleFileSelect(files[0], id);
+                    }
+                });
+
+                fileInput.addEventListener('change', (e) => {
+                    if (e.target.files.length > 0) {
+                        handleFileSelect(e.target.files[0], id);
+                    }
+                });
+            });
+
+            // Master Hlasitosť
+            document.getElementById('master-volume').addEventListener('input', (e) => {
+                const val = parseFloat(e.target.value);
+                document.getElementById('master-vol-lbl').innerText = `${Math.round(val * 100)}%`;
+                if (masterGain) {
+                    masterGain.gain.setValueAtTime(val, audioCtx.currentTime);
+                }
+            });
+
+            // Spustenie zvuku tlačidlom
+            document.getElementById('init-audio-btn').addEventListener('click', initAudio);
+
+            // Tlačidlo nahrávania
+            document.getElementById('rec-btn').addEventListener('click', toggleRecording);
+
+            // Registrácia ovládacích prvkov pre Decky
+            ['a', 'b'].forEach(id => {
+                const deck = decks[id];
+
+                // Play
+                document.getElementById(`play-${id}`).addEventListener('click', () => {
+                    initAudio();
+                    if (deck.audio && deck.audio.src) {
+                        deck.audio.play();
+                        deck.isPlaying = true;
+                        document.getElementById(`vinyl-${id}`).classList.add('spinning');
+                        updatePitchBpm(id); // Zaistí správne BPM a otáčky
+                    } else {
+                        showToast(`Najskôr nahrajte skladbu do Decku ${id.toUpperCase()}`, 'warning');
+                    }
+                });
+
+                // Pause
+                document.getElementById(`pause-${id}`).addEventListener('click', () => {
+                    if (deck.audio) {
+                        deck.audio.pause();
+                        deck.isPlaying = false;
+                        document.getElementById(`vinyl-${id}`).classList.remove('spinning');
+                    }
+                });
+
+                // Stop
+                document.getElementById(`stop-${id}`).addEventListener('click', () => {
+                    if (deck.audio) {
+                        deck.audio.pause();
+                        deck.audio.currentTime = 0;
+                        deck.isPlaying = false;
+                        document.getElementById(`vinyl-${id}`).classList.remove('spinning');
+                    }
+                });
+
+                // Loop
+                const loopBtn = document.getElementById(`loop-${id}`);
+                loopBtn.addEventListener('click', () => {
+                    if (deck.audio) {
+                        deck.audio.loop = !deck.audio.loop;
+                        if (deck.audio.loop) {
+                            loopBtn.classList.remove('text-slate-400', 'border-slate-700');
+                            loopBtn.classList.add(id === 'a' ? 'text-cyan-400' : 'text-pink-500', id === 'a' ? 'border-cyan-500' : 'border-pink-500');
+                        } else {
+                            loopBtn.classList.add('text-slate-400', 'border-slate-700');
+                            loopBtn.classList.remove('text-cyan-400', 'text-pink-500', 'border-cyan-500', 'border-pink-500');
+                        }
+                    }
+                });
+
+                // EQ - Výšky (High)
+                document.getElementById(`eq-high-${id}`).addEventListener('input', (e) => {
+                    const val = parseFloat(e.target.value);
+                    document.getElementById(`eq-high-val-${id}`).innerText = `${val > 0 ? '+' : ''}${val} dB`;
+                    if (deck.eqHigh) {
+                        deck.eqHigh.gain.setValueAtTime(val, audioCtx.currentTime);
+                    }
+                });
+
+                // EQ - Stredy (Mid)
+                document.getElementById(`eq-mid-${id}`).addEventListener('input', (e) => {
+                    const val = parseFloat(e.target.value);
+                    document.getElementById(`eq-mid-val-${id}`).innerText = `${val > 0 ? '+' : ''}${val} dB`;
+                    if (deck.eqMid) {
+                        deck.eqMid.gain.setValueAtTime(val, audioCtx.currentTime);
+                    }
+                });
+
+                // EQ - Basy (Low)
+                document.getElementById(`eq-low-${id}`).addEventListener('input', (e) => {
+                    const val = parseFloat(e.target.value);
+                    document.getElementById(`eq-low-val-${id}`).innerText = `${val > 0 ? '+' : ''}${val} dB`;
+                    if (deck.eqLow) {
+                        deck.eqLow.gain.setValueAtTime(val, audioCtx.currentTime);
+                    }
+                });
+
+                // Voltové sýtenie (Saturation)
+                document.getElementById(`volt-${id}`).addEventListener('input', (e) => {
+                    const val = parseInt(e.target.value);
+                    document.getElementById(`volt-lbl-${id}`).innerText = `VOLTOVÉ: ${val}%`;
+                    if (deck.saturator) {
+                        deck.saturator.curve = getDistortionCurve(val);
+                    }
+                });
+
+                // Bass Drop
+                document.getElementById(`drop-btn-${id}`).addEventListener('click', () => {
+                    triggerSubDrop(id);
+                });
+
+                // Tempo / Pitch
+                const pitchSlider = document.getElementById(`pitch-${id}`);
+                pitchSlider.addEventListener('input', () => updatePitchBpm(id));
+                
+                document.getElementById(`pitch-reset-${id}`).addEventListener('click', () => {
+                    pitchSlider.value = 1.0;
+                    updatePitchBpm(id);
+                });
+
+                // TAP tempo klikanie rytmu
+                document.getElementById(`tap-${id}`).addEventListener('click', () => {
+                    const now = Date.now();
+                    deck.tapTimes.push(now);
+                    // Ponecháme len posledné 4 kliky pre presnosť
+                    if (deck.tapTimes.length > 4) {
+                        deck.tapTimes.shift();
+                    }
+
+                    if (deck.tapTimes.length > 1) {
+                        const intervals = [];
+                        for (let i = 1; i < deck.tapTimes.length; i++) {
+                            intervals.push(deck.tapTimes[i] - deck.tapTimes[i - 1]);
+                        }
+                        const avgIntervalMs = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+                        const tappedBpm = Math.round(60000 / avgIntervalMs);
+                        
+                        setBpm(tappedBpm, id);
+                    }
+                });
+
+                // Hlasitosť Decku
+                document.getElementById(`volume-${id}`).addEventListener('input', (e) => {
+                    const val = parseFloat(e.target.value);
+                    document.getElementById(`vol-lbl-${id}`).innerText = `${Math.round(val * 100)}%`;
+                    if (deck.gain) {
+                        deck.gain.gain.setValueAtTime(val, audioCtx.currentTime);
+                    }
+                });
+            });
+
+            // Crossfader
+            document.getElementById('crossfader').addEventListener('input', updateCrossfader);
+
+            // Aktivácia zvuku pri prvej interakcii používateľa (Chrome autoplay podmienky)
+            document.body.addEventListener('click', () => {
+                if (!audioCtx) initAudio();
+            }, { once: true });
+        });
+    </script>
+</body>
+</html>
